@@ -120,10 +120,6 @@ bool MatchObject::isAnimating() const {
     return !std::holds_alternative<Idle>(state_);
 }
 
-bool MatchObject::isDestroying() const {
-    return std::holds_alternative<Destroying>(state_);
-}
-
 bool MatchObject::isDestroyed() const {
     return destroyed_;
 }
@@ -140,7 +136,7 @@ void MatchObject::moveTo(int row, int column) {
 }
 
 void MatchObject::destroy() {
-    if (isDestroying() || destroyed_) {
+    if (std::holds_alternative<Destroying>(state_) || destroyed_) {
         return;
     }
 
@@ -247,6 +243,10 @@ void Field::click(int x, int y) {
 
 int Field::index(int row, int column) const {
     return row * Size + column;
+}
+
+bool Field::inside(int row, int column) const {
+    return row >= 0 && row < Size && column >= 0 && column < Size;
 }
 
 IGameObject* Field::cell(int row, int column) const {
@@ -367,7 +367,7 @@ bool Field::activateMatches() {
 
             if (end - start >= 3) {
                 for (int column = start; column < end; ++column) {
-                    activateCell(row, column, matched);
+                    activateConnectedColor(row, column, color, matched);
                 }
             }
 
@@ -392,7 +392,7 @@ bool Field::activateMatches() {
 
             if (end - start >= 3) {
                 for (int row = start; row < end; ++row) {
-                    activateCell(row, column, matched);
+                    activateConnectedColor(row, column, color, matched);
                 }
             }
 
@@ -416,21 +416,47 @@ void Field::activateObject(IGameObject* object, MarkedCells& marked) {
         return;
     }
 
-    marked[index(object->row(), object->column())] = true;
+    activateConnectedColor(object->row(), object->column(), object->colorIndex(), marked);
 }
 
-void Field::activateCell(int row, int column, MarkedCells& marked) {
-    IGameObject* object = cell(row, column);
-    if (object == nullptr) {
+void Field::activateConnectedColor(int row, int column, int colorIndex, MarkedCells& marked) {
+    if (!inside(row, column)) {
         return;
     }
 
-    if (object->isBomb()) {
-        activateBombColor(object->colorIndex(), marked);
-        return;
-    }
+    std::queue<CellPosition> queue;
+    queue.push({row, column});
 
-    marked[index(row, column)] = true;
+    while (!queue.empty()) {
+        const CellPosition position = queue.front();
+        queue.pop();
+
+        const int currentRow = position.first;
+        const int currentColumn = position.second;
+        if (!inside(currentRow, currentColumn)) {
+            continue;
+        }
+
+        IGameObject* object = cell(currentRow, currentColumn);
+        if (object == nullptr || object->colorIndex() != colorIndex) {
+            continue;
+        }
+
+        const int currentIndex = index(currentRow, currentColumn);
+        if (marked[currentIndex]) {
+            continue;
+        }
+
+        marked[currentIndex] = true;
+        if (object->isBomb()) {
+            activateBombColor(colorIndex, marked);
+        }
+
+        queue.push({currentRow - 1, currentColumn});
+        queue.push({currentRow + 1, currentColumn});
+        queue.push({currentRow, currentColumn - 1});
+        queue.push({currentRow, currentColumn + 1});
+    }
 }
 
 void Field::activateBombColor(int colorIndex, MarkedCells& marked) {

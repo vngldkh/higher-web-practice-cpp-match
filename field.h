@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <new>
+#include <queue>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -24,7 +25,6 @@ public:
     virtual bool isBomb() const = 0;
     virtual bool contains(const QPointF& point, const QRectF& boardRect, double cellSize) const = 0;
     virtual bool isAnimating() const = 0;
-    virtual bool isDestroying() const = 0;
     virtual bool isDestroyed() const = 0;
     virtual void moveTo(int row, int column) = 0;
     virtual void destroy() = 0;
@@ -50,13 +50,7 @@ public:
         for (std::size_t i = 0; i < Capacity; ++i) {
             if (!used_[i]) {
                 used_[i] = true;
-
-                try {
-                    return new (&storage_[i]) T(std::forward<Args>(args)...);
-                } catch (...) {
-                    used_[i] = false;
-                    throw;
-                }
+                return new (&storage_[i]) T(std::forward<Args>(args)...);
             }
         }
 
@@ -100,7 +94,6 @@ public:
     bool isBomb() const override;
     bool contains(const QPointF& point, const QRectF& boardRect, double cellSize) const override;
     bool isAnimating() const override;
-    bool isDestroying() const override;
     bool isDestroyed() const override;
     void moveTo(int row, int column) override;
     void destroy() override;
@@ -168,12 +161,14 @@ public:
     void click(int x, int y);
 
 private:
-    static constexpr double BombChance = 0.01;
+    static constexpr double BombChance = 0.3;
 
     using CellArray = std::array<IGameObject*, CellCount>;
     using MarkedCells = std::array<bool, CellCount>;
+    using CellPosition = std::pair<int, int>;
 
     int index(int row, int column) const;
+    bool inside(int row, int column) const;
     IGameObject* cell(int row, int column) const;
     void setCell(int row, int column, IGameObject* object);
     IGameObject* createObject(int row, int column);
@@ -184,7 +179,7 @@ private:
     bool collapseAndFill();
     bool activateMatches();
     void activateObject(IGameObject* object, MarkedCells& marked);
-    void activateCell(int row, int column, MarkedCells& marked);
+    void activateConnectedColor(int row, int column, int colorIndex, MarkedCells& marked);
     void activateBombColor(int colorIndex, MarkedCells& marked);
     void startDestruction(const MarkedCells& marked);
 
