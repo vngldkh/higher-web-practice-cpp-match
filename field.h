@@ -7,7 +7,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -31,7 +30,7 @@ public:
     virtual void destroy() = 0;
 };
 
-template <std::size_t Capacity, std::size_t SlotSize, std::size_t SlotAlignment>
+template <typename T, std::size_t Capacity>
 class ObjectPool {
 public:
     ObjectPool() = default;
@@ -46,23 +45,16 @@ public:
         }
     }
 
-    template <typename T, typename... Args>
+    template <typename... Args>
     T* create(Args&&... args) {
-        static_assert(sizeof(T) <= SlotSize, "ObjectPool slot is too small for this type");
-        static_assert(alignof(T) <= SlotAlignment, "ObjectPool slot alignment is too small for this type");
-
         for (std::size_t i = 0; i < Capacity; ++i) {
             if (!used_[i]) {
                 used_[i] = true;
-                destructors_[i] = [](void* object) {
-                    static_cast<T*>(object)->~T();
-                };
 
                 try {
                     return new (&storage_[i]) T(std::forward<Args>(args)...);
                 } catch (...) {
                     used_[i] = false;
-                    destructors_[i] = nullptr;
                     throw;
                 }
             }
@@ -71,39 +63,29 @@ public:
         return nullptr;
     }
 
-    template <typename T>
     void destroy(T* object) {
         if (object == nullptr) {
             return;
         }
 
         for (std::size_t i = 0; i < Capacity; ++i) {
-            const auto slotBegin = reinterpret_cast<std::uintptr_t>(&storage_[i]);
-            const auto slotEnd = slotBegin + SlotSize;
-            const auto objectAddress = reinterpret_cast<std::uintptr_t>(object);
-
-            if (objectAddress >= slotBegin && objectAddress < slotEnd) {
-                destroySlot(i);
+            if (object == reinterpret_cast<T*>(&storage_[i])) {
+                object->~T();
                 used_[i] = false;
-                destructors_[i] = nullptr;
                 return;
             }
         }
     }
 
 private:
-    using Storage = typename std::aligned_storage<SlotSize, SlotAlignment>::type;
-    using Destructor = void (*)(void*);
+    using Storage = typename std::aligned_storage<sizeof(T), alignof(T)>::type;
 
     void destroySlot(std::size_t index) {
-        if (destructors_[index] != nullptr) {
-            destructors_[index](&storage_[index]);
-        }
+        reinterpret_cast<T*>(&storage_[index])->~T();
     }
 
     std::array<Storage, Capacity> storage_{};
     std::array<bool, Capacity> used_{};
-    std::array<Destructor, Capacity> destructors_{};
 };
 
 class MatchObject final : public IGameObject {
@@ -206,7 +188,7 @@ private:
     void activateBombColor(int colorIndex, MarkedCells& marked);
     void startDestruction(const MarkedCells& marked);
 
-    ObjectPool<CellCount, sizeof(MatchObject), alignof(MatchObject)> objectPool_;
+    ObjectPool<MatchObject, CellCount> objectPool_;
     CellArray cells_{};
     QRectF boardRect_;
     double cellSize_ = 0.0;

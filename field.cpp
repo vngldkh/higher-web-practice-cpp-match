@@ -260,7 +260,7 @@ void Field::setCell(int row, int column, IGameObject* object) {
 IGameObject* Field::createObject(int row, int column) {
     const int color = randomColorFor(row, column);
     const bool bomb = QRandomGenerator::global()->generateDouble() < BombChance;
-    return objectPool_.create<MatchObject>(row, column, color, bomb);
+    return objectPool_.create(row, column, color, bomb);
 }
 
 int Field::randomColorFor(int row, int column) const {
@@ -312,7 +312,7 @@ bool Field::hasAnimations() const {
 void Field::collectDestroyed() {
     for (IGameObject*& object : cells_) {
         if (object != nullptr && object->isDestroyed()) {
-            objectPool_.destroy(object);
+            objectPool_.destroy(static_cast<MatchObject*>(object));
             object = nullptr;
         }
     }
