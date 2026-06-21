@@ -29,12 +29,12 @@ void RenderWidget::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::Antialiasing);
     painter.fillRect(rect(), Qt::black);
 
-    field_.render(painter);
+    field_.Render(painter);
 }
 
 void RenderWidget::mousePressEvent(QMouseEvent *event)
 {
-    field_.click(event->position().x(), event->position().y());
+    field_.Click(event->position().x(), event->position().y());
     QWidget::mousePressEvent(event);
 }
 
@@ -42,7 +42,7 @@ void RenderWidget::tick()
 {
     double dt = frameTimer_.restart() / 1000.0;
 
-    field_.update(dt);
+    field_.Update(dt);
 
     update();
 }
